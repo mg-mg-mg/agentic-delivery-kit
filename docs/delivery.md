@@ -12,7 +12,7 @@ Selection requires exactly one allowed type, priority and track, at least one co
 
 Snapshots paginate and reject a limit-sized or malformed result. Existing matching local/remote branches and declared open PR references prevent a duplicate author. Pool claims are serialized by a nonblocking filesystem lock. Each worker preserves its own active state. A malformed peer claim stops the queue instead of allowing a duplicate.
 
-The primary checkout stays clean on its configured integration branch. Worktrees live below one configured parent. Saved lanes must still point to the same worktree and branch. No dotenv files are linked or copied to a lane. Git hooks are disabled for dispatcher writes. Treat the target repository's existing Git configuration as trusted, and validate toolchain read roots carefully.
+The primary checkout stays clean on its configured integration branch. Worktrees live below one configured parent. Saved lanes must still point to the same worktree and branch, and share the configured primary repository's Git common directory. No dotenv files are linked or copied to a lane. Git hooks are disabled for dispatcher writes. Treat the target repository's existing Git configuration as trusted, and validate toolchain read roots carefully.
 
 ## Review and merge
 

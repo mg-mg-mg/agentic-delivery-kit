@@ -72,3 +72,24 @@ def test_failed_start_callback_also_terminates_group(config, git_repo, tmp_path,
                   started, lambda: seen.append('finished'))
     assert seen[-1] == 'finished'
     assert not agent.group_alive(seen[0])
+
+
+def test_unrelated_replacement_repository_is_rejected(config, git_repo):
+    parent = config.location('repository', 'worktree_dir')
+    parent.mkdir()
+    foreign = parent / 'task-1-counterfeit'
+    subprocess.run(['git', 'init', '-q', '-b', 'fix/1-counterfeit', str(foreign)], check=True)
+    dispatcher = Dispatcher(config, 1)
+    dispatcher.state = {'number': 1, 'branch': 'fix/1-counterfeit', 'worktree': str(foreign)}
+    with pytest.raises(RuntimeError, match='repository identity'):
+        dispatcher.worktree()
+
+
+def test_legitimate_linked_worktree_retains_identity(config, git_repo):
+    parent = config.location('repository', 'worktree_dir')
+    parent.mkdir()
+    lane = parent / 'task-1-linked'
+    git(git_repo, 'worktree', 'add', '-b', 'fix/1-linked', str(lane), 'HEAD')
+    dispatcher = Dispatcher(config, 1)
+    dispatcher.state = {'number': 1, 'branch': 'fix/1-linked', 'worktree': str(lane)}
+    assert dispatcher.worktree() == lane

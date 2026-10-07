@@ -12,7 +12,7 @@ All target-specific settings live in `kit.toml`. Its repository is a fictional e
 
 The checks below were observed on the extraction candidate. Checks cover the entire publication tree, including hidden tracked files, plus every commit message and patch in this fresh history. They do not scan unrelated repositories or export private runtime state.
 
-- `uv run pytest -q`: 90 tests passed.
+- `uv run pytest -q`: 92 tests passed.
 - `uv run ruff check .`: passed with no findings.
 - Shell syntax gate over every `scripts/*.sh`: passed.
 - `python -m delivery_kit.governance`: configuration and maintained policy paths passed.
@@ -27,7 +27,7 @@ The checks below were observed on the extraction candidate. Checks cover the ent
 
 ## Runtime boundaries not proven by these checks
 
-Credentialless unit tests validate command construction, environment allowlists, ownership and metadata gates, fixed-SHA evidence and sticky leases. They do not prove the installed Codex CLI's OS sandbox behavior. Live Codex author/reviewer/verifier execution, GitHub task delivery/merge and actual LaunchAgent installation were not exercised for this extraction. Those remain explicit activation prerequisites.
+Credentialless unit tests validate command construction, environment allowlists, ownership and metadata gates, fixed-SHA evidence and sticky leases. Real Git fixtures reject unrelated replacement repositories and accept legitimate linked worktrees by comparing shared Git metadata identity. They do not prove the installed Codex CLI's OS sandbox behavior. Live Codex author/reviewer/verifier execution, GitHub task delivery/merge and actual LaunchAgent installation were not exercised for this extraction. Those remain explicit activation prerequisites.
 
 The inference broker requires its own authentication and model transport. Role tools must not receive general host credentials or network access. A boolean assertion is not a sandbox audit. The target repository's local Git/toolchain configuration and explicitly imported navigation plugins are trusted. The lease protects only cooperating local processes, and GitHub cannot atomically pin both merge head and base through this CLI command.
 

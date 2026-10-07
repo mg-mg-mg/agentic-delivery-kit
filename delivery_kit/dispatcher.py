@@ -107,6 +107,11 @@ class Dispatcher:
         if not worktree.name.startswith(self.config.section('repository')['worktree_template'].split('{slug}')[0].format(
                 number=self.state['number'])):
             raise RuntimeError('saved lane does not belong to its task')
+        primary_common = Path(self.git('rev-parse', '--path-format=absolute', '--git-common-dir')).resolve()
+        lane_common = Path(self.git('rev-parse', '--path-format=absolute', '--git-common-dir',
+                                   cwd=worktree)).resolve()
+        if lane_common != primary_common:
+            raise RuntimeError('owned worktree repository identity changed')
         if self.git('rev-parse', '--show-toplevel', cwd=worktree) != str(worktree):
             raise RuntimeError('owned worktree replaced')
         if self.git('branch', '--show-current', cwd=worktree) != self.state['branch']:
