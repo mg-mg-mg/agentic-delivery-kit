@@ -185,6 +185,9 @@ def test_verification_requires_exact_checks():
             verification_evidence(valid | {key: value}, 'a' * 40, 'b' * 40, checks)
     with pytest.raises(RuntimeError):
         review_evidence(review | {'remaining': ['manual release']}, 'a' * 40, 'b' * 40)
+    with pytest.raises(RuntimeError):
+        verification_evidence(valid | {'checks': [{'argv': checks[0], 'exit_code': False}]},
+                              'a' * 40, 'b' * 40, checks)
 
 
 @pytest.mark.parametrize('changed', [

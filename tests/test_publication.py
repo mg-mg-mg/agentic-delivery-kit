@@ -28,6 +28,21 @@ def test_scan_clean_tree(scan_repo):
     assert scan(scan_repo).returncode == 0
 
 
+def test_scan_clean_committed_decorator_is_not_an_email(scan_repo):
+    (scan_repo / 'fixture.py').write_text('@fixture.decorator\ndef helper():\n    return 1\n')
+    subprocess.run(['git', '-C', str(scan_repo), 'add', '.'], check=True)
+    subprocess.run(['git', '-C', str(scan_repo), 'commit', '-qm', 'Create decorated fixture'], check=True)
+    assert scan(scan_repo).returncode == 0
+
+
+def test_scan_catches_recognizable_email_without_echo(scan_repo):
+    synthetic = 'person' + '@' + 'example.invalid'
+    (scan_repo / 'unsafe.txt').write_text(synthetic)
+    result = scan(scan_repo)
+    assert result.returncode != 0
+    assert synthetic not in result.stderr
+
+
 def test_scan_denied_untracked_file(scan_repo):
     (scan_repo / 'unsafe.txt').write_text('owner-only-fixture')
     result = scan(scan_repo)

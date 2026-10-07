@@ -1,6 +1,6 @@
 # Security review
 
-Review date: 2026-10-08 (local date).
+Review date: 2026-10-07 (UTC).
 
 ## Extraction boundary
 
@@ -10,16 +10,20 @@ All target-specific settings live in `kit.toml`. Its repository is a fictional e
 
 ## Verification evidence
 
-The final check results are recorded below after they are observed. Checks cover the entire publication tree, including hidden tracked files, plus every commit message and patch in this fresh history. They do not scan unrelated repositories or export private runtime state.
+The checks below were observed on the extraction candidate. Checks cover the entire publication tree, including hidden tracked files, plus every commit message and patch in this fresh history. They do not scan unrelated repositories or export private runtime state.
 
-- `uv run pytest -q`: pending final candidate.
-- `uv run ruff check .`: pending final candidate.
-- `bash -n scripts/*.sh`: pending final candidate.
+- `uv run pytest -q`: 90 tests passed.
+- `uv run ruff check .`: passed with no findings.
+- Shell syntax gate over every `scripts/*.sh`: passed.
+- `python -m delivery_kit.governance`: configuration and maintained policy paths passed.
+- Synthetic navigation CLI with the shipped baseline: precision and recall both 1.0, zero missing/unexpected edges and zero regressions. The tests independently prove a degraded graph exits nonzero and does not rewrite the baseline.
 - ShellCheck: unavailable on the local tool path, shell syntax checking used instead.
 - Dedicated secret scanner: neither Gitleaks nor TruffleHog is installed. The specified ripgrep fallback is used.
-- `DENIED_TERMS=<owner-provided expression> bash scripts/check-publication.sh`: pending final candidate. The expression covers excluded product/domain/provider names, personal path patterns, internal-host prefixes and private identifier prefixes. The denied literals are intentionally not embedded in this repository.
+- `DENIED_TERMS=<owner-provided expression> bash scripts/check-publication.sh`: zero matches in publication files and all commit patches/messages. The expression covers excluded product/domain/provider names, personal path patterns, internal-host prefixes and private identifier prefixes. The denied literals are intentionally not embedded in this repository.
 - The same script scans recognizable GitHub/provider credentials, private key headers, embedded URL credentials, email addresses and long credential assignments. Publication paths and `git log -p --all` are both checked. No discovered value is printed.
-- Manual manifest review checks that files are limited to kit code, tests, synthetic fixtures, generic docs, license, configuration and public package metadata. Public dependency archive checksums are expected.
+- Manual manifest review: all publication files are limited to kit code, tests, synthetic fixtures, generic docs, license, configuration and public package metadata. The dependency lockfile uses the public package index and archive hashes only.
+- Git identities have empty email fields. History was initialized independently, with no alternate object store or imported refs.
+- Scanner regression tests catch denied untracked content, removed historical content, credential-shaped values and recognizable email addresses without echoing discovered values. A diff-prefixed Python decorator is explicitly tested as a non-email.
 
 ## Runtime boundaries not proven by these checks
 

@@ -37,7 +37,10 @@ def review_evidence(review: dict, head: str, base: str) -> list[list[str]]:
 
 def verification_evidence(result: dict, head: str, base: str, checks: list[list[str]]):
     expected = [{'argv': argv, 'exit_code': 0} for argv in checks]
-    if result.get('head') != head or result.get('base') != base or result.get('checks') != expected:
+    observed = result.get('checks')
+    if (not isinstance(observed, list) or not all(isinstance(item, dict) and
+            type(item.get('exit_code')) is int for item in observed)
+            or result.get('head') != head or result.get('base') != base or observed != expected):
         raise RuntimeError('independent verification missing, failed or mismatched')
 
 

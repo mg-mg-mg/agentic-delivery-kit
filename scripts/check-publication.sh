@@ -3,7 +3,7 @@ set -euo pipefail
 : "${DENIED_TERMS:?Provide the owner-reviewed denied-term regular expression outside the repository}"
 kit_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$kit_root"
-secret_pattern='(gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[A-Z0-9]{16}|sk-[A-Za-z0-9_-]{30,}|BEGIN[[:space:]]+([A-Z]+[[:space:]]+)?PRIVATE[[:space:]]+KEY|https?://[^/[:space:]]+:[^/@[:space:]]+@|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(api[_-]?key|token|password|client_secret)[[:space:]]*=[[:space:]]*["\x27][A-Za-z0-9/+_=.-]{20,})'
+secret_pattern='(gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,}|AKIA[A-Z0-9]{16}|sk-[A-Za-z0-9_-]{30,}|BEGIN[[:space:]]+([A-Z]+[[:space:]]+)?PRIVATE[[:space:]]+KEY|https?://[^/[:space:]]+:[^/@[:space:]]+@|[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|(api[_-]?key|token|password|client_secret)[[:space:]]*=[[:space:]]*["\x27][A-Za-z0-9/+_=.-]{20,})'
 scan_stream() {
     local pattern="$1"
     local label="$2"
