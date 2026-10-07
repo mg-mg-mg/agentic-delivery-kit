@@ -1,0 +1,19 @@
+[project]
+name = "agentic-delivery-kit"
+version = "0.1.0"
+description = "A configurable reference harness for bounded agentic delivery"
+requires-python = ">=3.11"
+license = "MIT"
+
+[dependency-groups]
+dev = ["pytest==8.4.2", "ruff==0.14.0"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

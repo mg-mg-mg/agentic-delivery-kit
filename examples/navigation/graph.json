@@ -1,0 +1,6 @@
+{
+  "edges": [
+    {"source": "workshop:build", "relation": "calls", "target": "workshop:prepare"},
+    {"source": "workshop:build", "relation": "calls", "target": "workshop:decorate"}
+  ]
+}

@@ -1,0 +1,57 @@
+[repository]
+owner = "example"
+name = "demo"
+checkout = "../demo"
+base_branch = "main"
+branch_template = "fix/{number}-{slug}"
+worktree_template = "task-{number}-{slug}"
+worktree_dir = "../delivery-worktrees"
+
+[queue]
+opt_in_label = "agent:ready"
+hold_labels = ["hold", "blocked", "needs-decision"]
+allowed_types = ["type:bug", "type:maintenance"]
+priorities = ["priority:p1", "priority:p2"]
+tracks = ["track:platform"]
+surface_prefix = "surface:"
+type_prefix = "type:"
+priority_prefix = "priority:"
+track_prefix = "track:"
+max_items = 1000
+
+[project]
+owner = "example"
+number = 0 # Zero disables Project selection. No node identifiers are stored.
+status_field = "Status"
+dispatch_field = "Dispatch class"
+ready_options = ["Ready", "Backlog"]
+deferred_option = "Deferred"
+
+[runtime]
+enabled = false
+state_dir = "~/.local/state/agentic-delivery"
+workers = 2
+pass_seconds = 7200
+phase_seconds = 1800
+merge_reserve_seconds = 300
+minimum_free_bytes = 2147483648
+max_changed_files = 50
+max_repairs = 2
+command_seconds = 60
+retained_failures = 5
+
+[agent]
+command = "codex"
+model = "gpt-6.1-sol"
+effort = "high"
+permissions_validated = false # Set only after testing the installed CLI's isolation.
+read_roots = [] # Optional locally installed toolchain roots, never credentials.
+
+[launch]
+label_prefix = "com.example.agentic-delivery"
+interval_seconds = 900
+python = "python3"
+
+[guards]
+forbidden_paths = [".env", ".env.*", "*.env", "*.pem", "*.key", "*credential*", "*secret*", ".github/workflows/*"]
+required_docs = ["README.md", "SECURITY_REVIEW.md", "docs/delivery.md"]
