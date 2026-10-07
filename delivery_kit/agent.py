@@ -8,6 +8,7 @@ import subprocess
 import time
 
 from .config import Config
+from .guards import safe_git_metadata
 
 
 def environment(scratch: Path) -> dict[str, str]:
@@ -25,6 +26,7 @@ def arguments(config: Config, worktree: Path, role: str, scratch: Path,
         raise ValueError('unknown agent role')
     if not config.section('agent')['permissions_validated']:
         raise RuntimeError('installed CLI permissions must be validated before execution')
+    safe_git_metadata(config, worktree)
     permission = 'write' if role in {'author', 'verify'} else 'read'
     roots = {'.': permission, '.git': 'read', '.codex': 'read', '.env': 'deny',
              '**/*.env': 'deny', '**/.env*': 'deny', '**/*credential*': 'deny',

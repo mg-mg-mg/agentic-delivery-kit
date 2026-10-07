@@ -13,7 +13,7 @@ def git(repo, *args):
                           text=True, capture_output=True).stdout.strip()
 
 
-@pytest.mark.parametrize('mismatch', ['none', 'parent', 'tree', 'head'])
+@pytest.mark.parametrize('mismatch', ['none', 'parent', 'tree', 'head', 'target', 'ancestor'])
 def test_squash_reconciliation_uses_real_git_objects(config, git_repo, issue, monkeypatch, mismatch):
     base = git(git_repo, 'rev-parse', 'HEAD')
     (git_repo / 'helper.py').write_text('def helper():\n    return 1\n')
@@ -25,13 +25,15 @@ def test_squash_reconciliation_uses_real_git_objects(config, git_repo, issue, mo
         tree = git(git_repo, 'rev-parse', f'{base}^{{tree}}')
     parent = head if mismatch == 'parent' else base
     merged = git(git_repo, 'commit-tree', tree, '-p', parent, '-m', 'Integrate synthetic helper')
+    git(git_repo, 'update-ref', 'refs/remotes/origin/main', base if mismatch == 'ancestor' else merged)
     dispatcher = Dispatcher(config, 1)
     dispatcher.directory.mkdir(parents=True)
-    dispatcher.state = {'number': 1, 'pr': 1, 'phase': 'merge_pending',
+    dispatcher.state = {'number': 1, 'pr': 1, 'branch': 'fix/1-helper', 'phase': 'merge_pending',
                         'evidence': {'head': head, 'base': base}}
     save(dispatcher.active, dispatcher.state)
     monkeypatch.setattr(dispatcher.github, 'pr', lambda number: {
         'state': 'MERGED', 'headRefOid': base if mismatch == 'head' else head,
+        'headRefName': 'fix/1-helper', 'baseRefName': 'other' if mismatch == 'target' else 'main',
         'mergeCommit': {'oid': merged},
     })
     monkeypatch.setattr(dispatcher, 'current_issue', lambda: issue)

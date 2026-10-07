@@ -12,7 +12,7 @@ All target-specific settings live in `kit.toml`. Its repository is a fictional e
 
 The checks below were observed on the extraction candidate. Checks cover the entire publication tree, including hidden tracked files, plus every commit message and patch in this fresh history. They do not scan unrelated repositories or export private runtime state.
 
-- `uv run pytest -q`: 92 tests passed.
+- `uv run pytest -q`: 108 tests passed.
 - `uv run ruff check .`: passed with no findings.
 - Shell syntax gate over every `scripts/*.sh`: passed.
 - `python -m delivery_kit.governance`: configuration and maintained policy paths passed.
@@ -23,6 +23,7 @@ The checks below were observed on the extraction candidate. Checks cover the ent
 - The same script scans recognizable GitHub/provider credentials, private key headers, embedded URL credentials, email addresses and long credential assignments. Publication paths and `git log -p --all` are both checked. No discovered value is printed.
 - Manual manifest review: all publication files are limited to kit code, tests, synthetic fixtures, generic docs, license, configuration and public package metadata. The dependency lockfile uses the public package index and archive hashes only.
 - Git identities have empty email fields. History was initialized independently, with no alternate object store or imported refs.
+- Real Git regressions verify complete committed publication history, including forbidden paths removed before the final tree, and reject unrelated bases. Merge reconciliation rejects a different target branch or missing integration-branch ancestry. Known credential-capable configuration keys, mismatched origins, linked-worktree configuration and other worktrees' shared configuration are rejected before role launch.
 - Scanner regression tests catch denied untracked content, removed historical content, credential-shaped values and recognizable email addresses without echoing discovered values. A diff-prefixed Python decorator is explicitly tested as a non-email.
 
 ## Runtime boundaries not proven by these checks

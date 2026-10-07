@@ -36,6 +36,7 @@ phase_seconds = 1800
 merge_reserve_seconds = 300
 minimum_free_bytes = 2147483648
 max_changed_files = 50
+max_commits = 20
 max_repairs = 2
 command_seconds = 60
 retained_failures = 5

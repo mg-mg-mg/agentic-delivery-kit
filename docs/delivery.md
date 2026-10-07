@@ -16,9 +16,13 @@ The primary checkout stays clean on its configured integration branch. Worktrees
 
 ## Review and merge
 
+Before every model role, the dispatcher permits only standard credential-free local/worktree Git metadata and the exact HTTPS origin. Credential helpers, HTTP headers, include files, aliases, filters and extra remotes in local configuration stop activation. Move approved authentication into the trusted dispatcher's external credential store, never repository metadata. Repository history must also be credential-free. This precheck is not an atomic defense against a hostile process changing metadata afterward, so only trusted checkouts are supported.
+
+Before every push, including a clean resumed lane, validate base ancestry, every commit's touched paths, cumulative file and commit limits, whitespace and automatic closing text. A forbidden path added then removed still blocks publication. Staging checks alone are not publication evidence.
+
 Every ready change needs separate read-only review and independent observed checks at exact head/base commits. Findings, remaining criteria or unavailable checks block merge. A changed head/base invalidates prior evidence. The dispatcher uses `--squash --match-head-commit` and never uses an administrator bypass or unchecked auto-merge.
 
-PR text and commits cannot use automatic closing keywords, since issue completion must not occur before reconciliation. The reference does not automatically close an Issue or mutate Project status. After merging it verifies a single squash parent equal to the reviewed base and a tree equal to the reviewed head. Issue content/labels must still match the saved fingerprint. Evidence stays in private runtime state, not in this reference repository.
+PR text and commits cannot use automatic closing keywords, since issue completion must not occur before reconciliation. The reference does not automatically close an Issue or mutate Project status. After merging it verifies the owned head branch, configured base branch, a single squash parent equal to the reviewed base, a tree equal to the reviewed head and ancestry in the fetched integration branch. Issue content/labels must still match the saved fingerprint. Evidence stays in private runtime state, not in this reference repository.
 
 ## Interruption and leases
 

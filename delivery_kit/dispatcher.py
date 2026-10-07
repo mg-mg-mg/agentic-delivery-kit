@@ -15,7 +15,7 @@ import uuid
 from . import agent
 from .config import load
 from .github import GitHub, eligible, fingerprint, select
-from .guards import CLOSING, remote_gate, review_evidence, staged, verification_evidence
+from .guards import CLOSING, publication, remote_gate, review_evidence, safe_git_metadata, staged, verification_evidence
 from .lease import main_lease
 
 
@@ -77,6 +77,7 @@ class Dispatcher:
 
     def preflight(self):
         config = self.config
+        safe_git_metadata(config, config.checkout)
         actual = self.github.json('gh', 'repo', 'view', config.repo, '--json', 'nameWithOwner')
         if actual.get('nameWithOwner', '').lower() != config.repo.lower():
             raise RuntimeError('repository identity mismatch')
@@ -180,6 +181,7 @@ class Dispatcher:
         head = self.git('rev-parse', 'HEAD', cwd=worktree)
         if head == self.state['base']:
             raise RuntimeError('author produced no change')
+        publication(self.config, self.github, worktree, self.state['base'], head)
         self.current_issue()
         self.git('push', 'origin', f'HEAD:refs/heads/{self.state["branch"]}', cwd=worktree)
         pulls = self.github.json('gh', 'pr', 'list', '--repo', self.config.repo,
@@ -204,6 +206,9 @@ class Dispatcher:
         pr = self.github.pr(self.state['pr'])
         if pr.get('state') != 'MERGED' or pr.get('headRefOid') != evidence['head']:
             raise RuntimeError('merge not confirmed, preserve pending lane')
+        if (pr.get('baseRefName') != self.config.section('repository')['base_branch']
+                or pr.get('headRefName') != self.state['branch']):
+            raise RuntimeError('merged PR target or owned branch changed')
         commit = pr['mergeCommit']['oid']
         self.git('fetch', 'origin', self.config.section('repository')['base_branch'])
         parents = self.git('rev-list', '--parents', '-n', '1', commit).split()
@@ -211,6 +216,8 @@ class Dispatcher:
             raise RuntimeError('squash parent differs from reviewed base, manual reconciliation required')
         if self.git('rev-parse', f'{commit}^{{tree}}') != self.git('rev-parse', f'{evidence["head"]}^{{tree}}'):
             raise RuntimeError('squash tree differs from reviewed head')
+        self.git('merge-base', '--is-ancestor', commit,
+                 f'origin/{self.config.section("repository")["base_branch"]}')
         self.current_issue()
         self.state.update(phase='complete', merged=commit)
         self.persist()

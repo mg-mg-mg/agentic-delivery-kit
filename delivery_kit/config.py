@@ -46,7 +46,7 @@ def load(path: Path) -> Config:
     runtime = data['runtime']
     for name in ('workers', 'pass_seconds', 'phase_seconds', 'merge_reserve_seconds',
                  'minimum_free_bytes', 'max_changed_files', 'max_repairs',
-                 'command_seconds', 'retained_failures'):
+                 'max_commits', 'command_seconds', 'retained_failures'):
         if type(runtime.get(name)) is not int or runtime[name] < 1:
             raise ValueError(f'invalid positive budget: {name}')
     if runtime['merge_reserve_seconds'] >= runtime['pass_seconds']:
