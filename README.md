@@ -35,7 +35,7 @@ python -m delivery_kit.navigation --source examples/navigation --graph examples/
 
 The default command validates configuration only. It does not contact GitHub or start model work. **Execution and timer installation are disabled by default.** Copy `kit.toml` to the ignored `local.toml` and configure the target checkout, repository owner/name, label policy, optional Project fields/options, names, state location, model/effort, worker count and limits. All deployment-specific settings belong in that one file. Secrets never belong there.
 
-Before enabling, validate the installed CLI's named permission profile on a disposable checkout: tool networking denied, secret-file reads denied, author writes confined to its checkout, reviewer writes denied, Git metadata writes denied, user hooks/apps disabled, subprocess descendants terminated on timeout. The Codex inference broker still needs its own login and model connectivity. “Offline” describes tools and checks, not inference transport. `permissions_validated` is an explicit owner assertion, not a claim made by this package.
+Before enabling, validate the installed CLI's named permission profile on a disposable checkout: tool networking denied, secret-file reads denied, author writes confined to its checkout, reviewer writes denied, Git metadata writes denied, user hooks/apps disabled. Separately validate OS-level containment of every descendant for the role's lifetime, including detached sessions and immediate parent exits; process-group cleanup does not provide it. The Codex inference broker still needs its own login and model connectivity. “Offline” describes tools and checks, not inference transport. Both `permissions_validated` and `process_containment_validated` are required owner assertions, not sandbox audits performed by this package.
 
 Only after this validation and an authorization covering the target repository's publishing and merging:
 
@@ -52,7 +52,7 @@ Add the configured opt-in label only to fully specified, authorized tasks. Holds
 
 - Timer installation is macOS LaunchAgent-specific. Tests are credentialless and synthetic, not evidence of a live Codex/GitHub delivery.
 - CLI permission interfaces evolve. No compatibility fallback disables isolation. Validate the installed release before enabling.
-- Native dependency API or Project access failures stop selection. Project fields are read-only and their CLI JSON names must match configured display field names.
+- Native dependency API or Project access failures stop selection. Project fields are read-only: configured single-select field definitions and required options must exist before selection. An empty dispatch value is permitted only after schema validation; CLI JSON names must match configured display field names.
 - This intentionally smaller reference leaves Issue closing, Project mutations, automatic rebases, notifications and worktree cleanup to explicit owner actions.
 - Models can misjudge criteria or fabricate observations. Separate roles and source checks reduce risk but are not formal proof. Do not enable against untrusted repositories or issues requiring deployments, irreversible changes, private data or external messages.
 - GitHub pins the merge head, not the base. A competing remote update can only be detected afterward. An unexpected parent/tree requires manual reconciliation, never automatic rollback.

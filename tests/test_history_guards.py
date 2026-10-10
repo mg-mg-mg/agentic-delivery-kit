@@ -97,3 +97,24 @@ def test_other_worktree_credentials_block_shared_metadata_grant(config, git_repo
     git(other, 'config', '--worktree', 'http.extraHeader', 'synthetic')
     with pytest.raises(RuntimeError, match='credentialless'):
         safe_git_metadata(config, git_repo)
+
+
+def test_added_then_removed_symlink_is_rejected(config, git_repo):
+    base = git(git_repo, 'rev-parse', 'HEAD')
+    link = git_repo / 'fixture-link'
+    link.symlink_to('helper.py')
+    git(git_repo, 'add', '.')
+    git(git_repo, 'commit', '-qm', 'Create link')
+    link.unlink()
+    head = commit_file(git_repo, 'helper.py', 'safe\n')
+    with pytest.raises(RuntimeError, match='symbolic links'):
+        publication(config, GitHub(config), git_repo, base, head)
+
+
+def test_untouched_preexisting_symlink_is_allowed(config, git_repo):
+    (git_repo / 'fixture-link').symlink_to('helper.py')
+    git(git_repo, 'add', '.')
+    git(git_repo, 'commit', '-qm', 'Create baseline link')
+    base = git(git_repo, 'rev-parse', 'HEAD')
+    head = commit_file(git_repo, 'helper.py', 'safe\n')
+    publication(config, GitHub(config), git_repo, base, head)

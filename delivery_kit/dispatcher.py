@@ -155,17 +155,22 @@ class Dispatcher:
             raise TimeoutError('finite pass budget exhausted')
         scratch = self.directory / f'phase-{uuid.uuid4().hex}'
         def started(pid):
-            self.state['child_pid'] = pid
+            if pid is None:
+                self.state['launching'] = True
+            else:
+                self.state['child_pid'] = pid
+                self.state.pop('launching', None)
             self.persist()
         def finished():
             self.state.pop('child_pid', None)
+            self.state.pop('launching', None)
             self.persist()
         try:
             return agent.run(self.config, worktree, role, scratch, shape, prompt, seconds, started, finished)
         finally:
             # Only retain the configured number of finished diagnostic artifacts.
             completed = sorted(self.directory.glob('phase-*'), key=lambda path: path.stat().st_mtime)
-            if 'child_pid' not in self.state:
+            if 'child_pid' not in self.state and 'launching' not in self.state:
                 for path in completed[:-self.config.section('runtime')['retained_failures']]:
                     if path.is_dir() and not path.is_symlink():
                         shutil.rmtree(path)
@@ -254,11 +259,8 @@ class Dispatcher:
         self.claim()
         if not self.state:
             return 'idle'
-        if self.state.get('child_pid'):
-            if agent.group_alive(self.state['child_pid']):
-                raise RuntimeError('previous process group still live, preserve lane')
-            self.state.pop('child_pid')
-            self.persist()
+        if self.state.get('launching') or self.state.get('child_pid'):
+            raise RuntimeError('unresolved role ownership, preserve lane for manual inspection')
         if self.state['phase'] in {'merge_pending', 'complete'}:
             with lock(self.config.state / 'merge.lock'), main_lease(self.config.checkout):
                 self.reconcile()
@@ -325,7 +327,9 @@ def main(argv=None):
         print(json.dumps({'repository': config.repo, 'workers': config.section('runtime')['workers'],
                           'enabled': config.section('runtime')['enabled'], 'mode': 'configuration-only'}))
         return 0
-    if not config.section('runtime')['enabled'] or not config.section('agent')['permissions_validated']:
+    if (not config.section('runtime')['enabled']
+            or not config.section('agent')['permissions_validated']
+            or not config.section('agent')['process_containment_validated']):
         parser.error('execution disabled until owner configuration and isolation validation')
     dispatcher = Dispatcher(config, args.worker)
     with lock(dispatcher.directory / 'run.lock'):

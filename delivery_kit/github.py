@@ -57,6 +57,26 @@ class GitHub:
         if project['number'] == 0:
             return {}
         limit = self.config.section('queue')['max_items']
+        definition = self.json('gh', 'project', 'field-list', str(project['number']),
+                               '--owner', project['owner'], '--format', 'json', '--limit', str(limit))
+        fields = definition.get('fields')
+        if (not isinstance(fields, list) or len(fields) >= limit
+                or definition.get('totalCount') != len(fields)):
+            raise RuntimeError('Project field snapshot incomplete')
+        options = {}
+        for name, required in (
+                (project['status_field'], set(project['ready_options'])),
+                (project['dispatch_field'], {project['deferred_option']})):
+            matches = [field for field in fields if field.get('name') == name]
+            if len(matches) != 1 or not isinstance(matches[0].get('options'), list):
+                raise RuntimeError('Project configured field unavailable or misconfigured')
+            values = matches[0]['options']
+            if not all(isinstance(value, dict) and isinstance(value.get('name'), str)
+                       for value in values):
+                raise RuntimeError('Project field options unavailable')
+            options[name] = {value['name'] for value in values}
+            if not required <= options[name] or len(options[name]) != len(values):
+                raise RuntimeError('Project configured field options misconfigured')
         result = self.json('gh', 'project', 'item-list', str(project['number']),
                            '--owner', project['owner'], '--format', 'json', '--limit', str(limit))
         rows = result.get('items')
@@ -73,9 +93,12 @@ class GitHub:
             status_key = project['status_field'][:1].lower() + project['status_field'][1:]
             dispatch_key = project['dispatch_field'][:1].lower() + project['dispatch_field'][1:]
             status = row.get(status_key)
-            if not isinstance(status, str):
+            dispatch = row.get(dispatch_key)
+            if not isinstance(status, str) or status not in options[project['status_field']]:
                 raise RuntimeError('Project status unavailable')
-            matches[number] = {'status': status, 'dispatch': row.get(dispatch_key)}
+            if dispatch is not None and dispatch not in options[project['dispatch_field']]:
+                raise RuntimeError('Project dispatch value unavailable')
+            matches[number] = {'status': status, 'dispatch': dispatch}
         return matches
 
     def pr(self, number: int) -> dict:

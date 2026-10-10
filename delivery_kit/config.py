@@ -60,7 +60,9 @@ def load(path: Path) -> Config:
             if not isinstance(data[section].get(name), list) or not all(
                     isinstance(value, str) and value for value in data[section][name]):
                 raise ValueError(f'invalid string list: {section}.{name}')
-    if type(runtime.get('enabled')) is not bool or type(data['agent'].get('permissions_validated')) is not bool:
+    if (type(runtime.get('enabled')) is not bool
+            or any(type(data['agent'].get(name)) is not bool
+                   for name in ('permissions_validated', 'process_containment_validated'))):
         raise ValueError('execution gates must be booleans')
     for name in ('branch_template', 'worktree_template'):
         if '{number}' not in repo[name] or '{slug}' not in repo[name]:

@@ -8,7 +8,7 @@ scan_stream() {
     local pattern="$1"
     local label="$2"
     local status=0
-    rg -i -q "$pattern" || status=$?
+    rg --text -i -q "$pattern" || status=$?
     if [[ "$status" -eq 0 ]]; then
         printf '%s\n' "Publication scan failed: $label" >&2
         return 1
@@ -18,11 +18,44 @@ scan_stream() {
         return "$status"
     fi
 }
-# Read only intended Git paths, including hidden files, never local runtime derivatives.
-git ls-files -z --cached --others --exclude-standard | xargs -0 cat | scan_stream "$DENIED_TERMS" 'denied terms in files'
-git ls-files -z --cached --others --exclude-standard | xargs -0 cat | scan_stream "$secret_pattern" 'credential patterns in files'
+# Keep index bytes independent of unstaged edits. NUL inventories preserve unusual names.
+worktree_bytes() {
+    while IFS= read -r -d '' path; do
+        if [[ -f "$path" || -L "$path" ]]; then cat -- "$path"; fi
+    done < <(git ls-files -z --cached --others --exclude-standard)
+}
+index_bytes() {
+    git ls-files --stage -z | while IFS= read -r -d '' entry; do
+        header="${entry%%$'\t'*}"
+        read -r mode blob stage <<< "$header"
+        git cat-file blob "$blob"
+    done
+}
+history_paths() {
+    git rev-list --all | while IFS= read -r commit; do
+        git ls-tree -r -z --name-only "$commit"
+    done
+}
+history_bytes() {
+    git rev-list --all | while IFS= read -r commit; do
+        git ls-tree -r "$commit"
+    done | while IFS=$'\t' read -r header path; do
+        read -r mode type blob <<< "$header"
+        if [[ "$type" == blob ]]; then printf '%s\n' "$blob"; fi
+    done | sort -u | while IFS= read -r blob; do
+        git cat-file blob "$blob"
+    done
+}
+git ls-files -z --cached --others --exclude-standard | scan_stream "$DENIED_TERMS" 'denied terms in file paths'
+worktree_bytes | scan_stream "$DENIED_TERMS" 'denied terms in files'
+worktree_bytes | scan_stream "$secret_pattern" 'credential patterns in files'
+index_bytes | scan_stream "$DENIED_TERMS" 'denied terms in index'
+index_bytes | scan_stream "$secret_pattern" 'credential patterns in index'
 if git rev-parse --verify HEAD >/dev/null 2>&1; then
-    git log -p --all | scan_stream "$DENIED_TERMS" 'denied terms in history'
-    git log -p --all | scan_stream "$secret_pattern" 'credential patterns in history'
+    history_paths | scan_stream "$DENIED_TERMS" 'denied terms in history paths'
+    history_bytes | scan_stream "$DENIED_TERMS" 'denied terms in history'
+    history_bytes | scan_stream "$secret_pattern" 'credential patterns in history'
+    git log --all --format=raw --no-patch | scan_stream "$DENIED_TERMS" 'denied terms in commit metadata'
+    git log --all --format=raw --no-patch | scan_stream "$secret_pattern" 'credential patterns in commit metadata'
 fi
 printf '%s\n' 'Publication scans passed: zero matches in files and history'

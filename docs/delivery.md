@@ -30,7 +30,13 @@ PR text and commits cannot use automatic closing keywords, since issue completio
 
 Inspect private owner metadata, processes, branch/worktree state and remote merge evidence before manually clearing a retained lease. All cooperating fetch/merge entrypoints must use the same lease. Raw Git commands and other machines can ignore it. The lease has no nested acquisition or inherited-token protocol in this reference.
 
-A process-group marker is saved before model work. Timeouts terminate the whole group and retain the lane if termination cannot be confirmed. The current worker lock is held throughout a pass. Installer rendering/installation acquires every worker lock first and refuses to overwrite existing timers. Failed installation is not automatically rolled back.
+Before spawning, a durable conservative launching marker is saved. A pipe-gated exec wrapper cannot start role work until its PID has been registered durably. Unresolved launching or child ownership always blocks automatic replacement, even if the original process group is absent; recovery requires manual inspection.
+
+Role execution and timer installation require the owner assertion `process_containment_validated = true`, in addition to the permission gate. Set it only after validating that the installed CLI/OS profile contains all descendants for the role's lifetime, including detached sessions. The kit does not implement or independently audit that OS containment; a hard descendant-lifetime guarantee comes only from the validated containment mechanism.
+
+Process-group termination remains best-effort cleanup, not descendant containment. Even a single child that starts a new session and whose parent exits immediately can survive outside the original group. No process-table polling or detached-PID discovery is performed. Any abnormal exit, timeout, signal, invalid result or failed registration keeps the writer marker sticky; a successful structured result clears it only after the original group is absent, relying on the owner's containment assertion for descendants. Unresolved markers require manual inspection regardless of apparent PID absence.
+
+The current worker lock is held throughout a pass. Installer rendering/installation acquires every worker lock first and refuses to overwrite existing timers. Failed installation is not automatically rolled back.
 
 ## Deliberately manual recovery
 

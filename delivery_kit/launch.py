@@ -50,7 +50,8 @@ def main(argv=None):
     config = load(args.config)
     root = Path(__file__).resolve().parent.parent
     if args.install and (sys.platform != 'darwin' or not config.section('runtime')['enabled']
-                         or not config.section('agent')['permissions_validated']):
+                         or not config.section('agent')['permissions_validated']
+                         or not config.section('agent')['process_containment_validated']):
         parser.error('installation requires macOS and explicitly enabled, validated execution')
     destination = args.render or Path.home() / 'Library/LaunchAgents'
     destination.mkdir(parents=True, exist_ok=True)

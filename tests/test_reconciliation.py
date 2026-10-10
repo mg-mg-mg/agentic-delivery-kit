@@ -51,18 +51,21 @@ def test_squash_reconciliation_uses_real_git_objects(config, git_repo, issue, mo
         assert dispatcher.state['phase'] == 'merge_pending'
 
 
-def test_timeout_terminates_group_and_finishes_marker(config, git_repo, tmp_path, monkeypatch):
+def test_timeout_terminates_group_and_retains_marker(config, git_repo, tmp_path, monkeypatch):
+    config.data['agent']['process_containment_validated'] = True
     monkeypatch.setattr(agent, 'arguments', lambda *args:
                         [sys.executable, '-c', 'import time; time.sleep(60)'])
     seen = []
     with pytest.raises(subprocess.TimeoutExpired):
         agent.run(config, git_repo, 'author', tmp_path / 'scratch', {}, 'Synthetic task', 0.05,
                   lambda pid: seen.append(pid), lambda: seen.append('finished'))
-    assert seen[-1] == 'finished'
-    assert not agent.group_alive(seen[0])
+    assert 'finished' not in seen
+    assert seen[0] is None
+    assert not agent.group_alive(seen[1])
 
 
-def test_failed_start_callback_also_terminates_group(config, git_repo, tmp_path, monkeypatch):
+def test_failed_launch_marker_prevents_spawn(config, git_repo, tmp_path, monkeypatch):
+    config.data['agent']['process_containment_validated'] = True
     monkeypatch.setattr(agent, 'arguments', lambda *args:
                         [sys.executable, '-c', 'import time; time.sleep(60)'])
     seen = []
@@ -72,8 +75,7 @@ def test_failed_start_callback_also_terminates_group(config, git_repo, tmp_path,
     with pytest.raises(RuntimeError, match='synthetic'):
         agent.run(config, git_repo, 'author', tmp_path / 'scratch', {}, 'Synthetic task', 1,
                   started, lambda: seen.append('finished'))
-    assert seen[-1] == 'finished'
-    assert not agent.group_alive(seen[0])
+    assert seen == [None]
 
 
 def test_unrelated_replacement_repository_is_rejected(config, git_repo):

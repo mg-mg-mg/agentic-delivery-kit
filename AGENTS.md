@@ -16,6 +16,6 @@ This repository is a reference harness, not authorization to operate a target se
 
 ## Verification
 
-Before committing, review staged paths and run the changed regression tests. The final candidate must pass `make verify` with an environment containing pytest/Ruff. Run the synthetic navigation baseline too. Supply an owner-reviewed exclusion expression outside this repository to `scripts/check-publication.sh`, and scan both files and all commit patches/messages before pushing.
+Before committing, review staged paths and run the changed regression tests. The final candidate must pass `make verify` with an environment containing pytest/Ruff. Run the synthetic navigation baseline too. Supply an owner-reviewed exclusion expression outside this repository to `scripts/check-publication.sh`, and scan working-tree/index content, paths, all reachable historical blobs and commit metadata before pushing.
 
 Keep development caches and state ignored. Document unavailable checks truthfully in `SECURITY_REVIEW.md`. Unit tests and command-construction assertions do not prove OS sandbox enforcement or live delivery. Keep repository visibility private until the owner explicitly approves a change.

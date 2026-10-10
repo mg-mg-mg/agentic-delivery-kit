@@ -19,6 +19,7 @@ def test_defaults_are_disabled():
     config = load(Path(__file__).resolve().parents[1] / 'kit.toml')
     assert config.section('runtime')['enabled'] is False
     assert config.section('agent')['permissions_validated'] is False
+    assert config.section('agent')['process_containment_validated'] is False
 
 
 def test_preview_never_calls_network(monkeypatch, capsys):
@@ -225,3 +226,44 @@ def test_worker_limit(config):
         Dispatcher(config, 0)
     with pytest.raises(ValueError):
         Dispatcher(config, config.data['runtime']['workers'] + 1)
+
+
+@pytest.mark.parametrize('fault', ['missing', 'wrong_option', 'wrong_type', 'duplicate', None])
+def test_project_schema_distinguishes_empty_dispatch(config, monkeypatch, fault):
+    config.data['project']['number'] = 1
+    project = config.section('project')
+    fields = [
+        {'name': project['status_field'],
+         'options': [{'name': value} for value in project['ready_options']]},
+        {'name': project['dispatch_field'], 'options': [{'name': project['deferred_option']}]},
+    ]
+    if fault == 'missing':
+        fields.pop()
+    elif fault == 'wrong_option':
+        fields[1]['options'] = [{'name': 'Other'}]
+    elif fault == 'wrong_type':
+        fields[1].pop('options')
+    elif fault == 'duplicate':
+        fields.append(deepcopy(fields[1]))
+    status_key = project['status_field'][:1].lower() + project['status_field'][1:]
+    row = {'content': {'repository': config.repo, 'type': 'Issue', 'number': 1},
+           status_key: 'Ready'}
+    github = GitHub(config)
+    monkeypatch.setattr(github, 'json', lambda *args:
+                        {'fields': fields, 'totalCount': len(fields)} if 'field-list' in args
+                        else {'items': [row], 'totalCount': 1})
+    if fault:
+        with pytest.raises(RuntimeError, match='field'):
+            github.project_rows()
+    else:
+        assert github.project_rows()[1]['dispatch'] is None
+
+
+def test_execute_requires_containment_validation(config, monkeypatch):
+    config.data['runtime']['enabled'] = True
+    config.data['agent']['permissions_validated'] = True
+    monkeypatch.setattr('delivery_kit.dispatcher.load', lambda path: config)
+    monkeypatch.setattr(subprocess, 'run', lambda *args, **kwargs: pytest.fail('execution begun'))
+    with pytest.raises(SystemExit) as error:
+        main(['--execute'])
+    assert error.value.code == 2

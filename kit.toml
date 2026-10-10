@@ -46,6 +46,7 @@ command = "codex"
 model = "gpt-6.1-sol"
 effort = "high"
 permissions_validated = false # Set only after testing the installed CLI's isolation.
+process_containment_validated = false # Assert only after validating descendant lifetime containment.
 read_roots = [] # Optional locally installed toolchain roots, never credentials.
 
 [launch]

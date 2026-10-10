@@ -35,8 +35,14 @@ def publication(config, github, worktree, base: str, head: str):
         raise RuntimeError('empty or oversized publication history')
     paths = set()
     for commit in commits:
-        paths.update(github.command('git', 'diff-tree', '--root', '-m', '-r', '--no-commit-id',
-                                    '--name-only', '-z', commit, cwd=worktree).split('\0'))
+        changes = github.command('git', 'diff-tree', '--root', '-m', '-r', '--no-commit-id',
+                                 '--no-renames', '-z', commit, cwd=worktree).split('\0')
+        for index in range(0, len(changes) - 1, 2):
+            header, path = changes[index:index + 2]
+            modes = header.removeprefix(':').split()[:2]
+            if '120000' in modes:
+                raise RuntimeError('new or changed historical symbolic links require manual review')
+            paths.add(path)
     check_paths(config, sorted(paths), worktree)
     github.command('git', 'diff', '--check', f'{base}..{head}', cwd=worktree)
     if CLOSING.search(github.command('git', 'log', '--format=%B', f'{base}..{head}', cwd=worktree)):
