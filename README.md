@@ -2,11 +2,11 @@
 
 [![CI](https://github.com/mg-mg-mg/agentic-delivery-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/mg-mg-mg/agentic-delivery-kit/actions/workflows/ci.yml)
 
-**Why this exists:** AI coding agents write code fast, but speed only helps if their output can be trusted. This kit shows the control boundaries I run in production: the agent that writes code cannot publish or merge it, a separate agent reviews the exact commit, a third re-runs the checks, and only a trusted dispatcher merges. It is a synthetic, tested extraction with no product code.
+**Why this exists:** AI coding agents write code fast, but speed only helps if their output can be trusted. This kit is a synthetic reference implementation of an earlier dispatcher-based delivery model, plus reusable guards, a cooperative lease, governance checks and source-grounded navigation. It contains no product code or private operational records.
 
-A public-safe reference implementation extracted from a production agentic delivery setup. It demonstrates reusable control boundaries, not the original application's code, data, configuration, history, or operational records.
+The dispatcher is retained as a constrained working example, not a description of today's production workflow. The companion [Agentic Engineering case study](https://github.com/mg-mg-mg/agentic-engineering) describes current practice.
 
-## Architecture
+## Reference architecture
 
 ```mermaid
 flowchart LR
@@ -21,13 +21,15 @@ flowchart LR
     L --- G
 ```
 
-Only the trusted dispatcher has GitHub access. Model roles cannot commit, publish, change accounts, or deploy. The author edits a dedicated worktree. A fresh read-only role reviews exact head and base commits and specifies checks. A separate verifier executes those checks without general host credentials or tool networking. The dispatcher validates structured evidence, current issue eligibility, the PR head/base and remaining criteria before a head-pinned squash merge. It verifies the resulting parent and tree afterward.
+In this reference, only the trusted dispatcher has GitHub access. Model roles cannot commit, publish, change accounts, or deploy. The author edits a dedicated worktree. A fresh read-only role reviews exact head and base commits and specifies checks. A separate verifier executes those checks without general host credentials or tool networking. The dispatcher validates structured evidence, current issue eligibility, the PR head/base and remaining criteria before a head-pinned squash merge. It verifies the resulting parent and tree afterward.
 
 The lease serializes cooperating local integration commands. It deliberately remains after failure. Queue claims and worker locks prevent duplicate local authors. Finite pass/phase/repair budgets, disk/file limits and bounded diagnostics constrain unattended work. These controls do not block independent remote writers.
 
 ## Configuration and safe start
 
 Requires Python 3.11+, Git, the GitHub CLI, a compatible Codex CLI, and an HTTPS origin matching the configured repository. Runtime modules use only the standard library. Development checks use pytest and Ruff.
+
+The role-launch adapter supports the Codex CLI only. There is no OMP adapter; changing the command name does not migrate its arguments or permission profiles.
 
 ```sh
 uv sync --group dev
@@ -36,6 +38,10 @@ uv run ruff check .
 python -m delivery_kit.dispatcher --config kit.toml
 python -m delivery_kit.navigation --source examples/navigation --graph examples/navigation/graph.json --baseline examples/navigation/baseline.json
 ```
+
+Before publication, run `bash scripts/check-publication.sh`. Its offline, nonsecret default policy rejects common private home paths, session-shaped UUIDs and credential/email patterns. An owner-reviewed `DENIED_TERMS` expression can replace the default for a specific publication review. Content, authors and taggers allow only the exact synthetic CI address and approved owner GitHub noreply identity; committers additionally allow GitHub's own noreply identity for hosted merges. Historical commit identity emails are exempt only through the pinned published snapshot; every annotated tag's tagger identity must be approved regardless of its target. Commit messages, names and blobs remain checked. This bounded scan is not a secret-free certification.
+
+If historical tag identities ever need grandfathering, pin the approved tag-object SHAs, not their target commits.
 
 The default command validates configuration only. It does not contact GitHub or start model work. **Execution and timer installation are disabled by default.** Copy `kit.toml` to the ignored `local.toml` and configure the target checkout, repository owner/name, label policy, optional Project fields/options, names, state location, model/effort, worker count and limits. All deployment-specific settings belong in that one file. Secrets never belong there.
 

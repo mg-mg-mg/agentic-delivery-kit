@@ -1,6 +1,6 @@
 # Agent instructions
 
-This repository is a reference harness, not authorization to operate a target service. Runtime execution is disabled until an owner configures a target, approves publication/merge scope, and validates the installed CLI's OS-level isolation.
+This repository preserves an earlier dispatcher-based reference harness and reusable primitives, not current production practice or authorization to operate a target service. Runtime execution is disabled until an owner configures a target, approves publication/merge scope, and validates the installed CLI's OS-level isolation.
 
 ## Boundaries
 
@@ -16,6 +16,6 @@ This repository is a reference harness, not authorization to operate a target se
 
 ## Verification
 
-Before committing, review staged paths and run the changed regression tests. The final candidate must pass `make verify` with an environment containing pytest/Ruff. Run the synthetic navigation baseline too. Supply an owner-reviewed exclusion expression outside this repository to `scripts/check-publication.sh`, and scan working-tree/index content, paths, all reachable historical blobs and commit metadata before pushing.
+Before committing, review staged paths and run the changed regression tests. The final candidate must pass `make verify` with an environment containing pytest/Ruff. Run the synthetic navigation baseline too. Run `bash scripts/check-publication.sh` with its nonsecret default policy, or an owner-reviewed `DENIED_TERMS` expression supplied outside the repository. It scans working-tree/index content, paths, all reachable historical blobs and commit metadata; only identity emails through the pinned published snapshot are exempt. Future commits must use the approved GitHub noreply identity; do not rewrite existing history.
 
-Keep development caches and state ignored. Document unavailable checks truthfully in `SECURITY_REVIEW.md`. Unit tests and command-construction assertions do not prove OS sandbox enforcement or live delivery. Keep repository visibility private until the owner explicitly approves a change.
+Keep development caches and state ignored. Document unavailable checks truthfully in `SECURITY_REVIEW.md`. Unit tests and command-construction assertions do not prove OS sandbox enforcement or live delivery. This repository is public; review every new publication without changing visibility.

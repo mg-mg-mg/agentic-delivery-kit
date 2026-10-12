@@ -1,5 +1,7 @@
 # Delivery boundaries and recovery
 
+This document describes the kit's earlier dispatcher-based reference model, not current production practice. Its strict evidence invalidation, restricted queue and manual reconciliation are deliberate reference constraints. For current practice, see the companion [Agentic Engineering case study](https://github.com/mg-mg-mg/agentic-engineering). The executable supports Codex CLI role launching, not OMP.
+
 ## Three independent responsibilities
 
 The author owns one dedicated task worktree and its implementation. The dispatcher, not the author, stages reviewed paths, commits, pushes and creates a PR. The reviewer is a separate read-only invocation at fixed head/base commits. The verifier is another credentialless invocation that executes the exact reviewer-selected argv checks. The integration role belongs to the trusted dispatcher.

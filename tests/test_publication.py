@@ -10,7 +10,7 @@ import pytest
 def scan_repo(tmp_path):
     subprocess.run(['git', 'init', '-q', str(tmp_path)], check=True)
     subprocess.run(['git', '-C', str(tmp_path), 'config', 'user.name', 'Fixture'], check=True)
-    subprocess.run(['git', '-C', str(tmp_path), 'config', 'user.email', ''], check=True)
+    subprocess.run(['git', '-C', str(tmp_path), 'config', 'user.email', 'ci@example.invalid'], check=True)
     scripts = tmp_path / 'scripts'
     scripts.mkdir()
     source = Path(__file__).resolve().parents[1] / 'scripts/check-publication.sh'
@@ -128,3 +128,108 @@ def test_merge_only_tree_history(scan_repo):
     clean = git(scan_repo, 'commit-tree', tree, '-p', merge, '-p', side, '-m', 'Clean merge')
     git(scan_repo, 'reset', '--hard', clean)
     assert scan(scan_repo).returncode != 0
+
+
+@pytest.mark.parametrize('identity', [
+    'ci@example.invalid', '14136835+mg-mg-mg@users.noreply.github.com',
+])
+def test_exact_approved_identities(scan_repo, identity):
+    (scan_repo / 'fixture').write_text(identity)
+    git(scan_repo, 'config', 'user.email', identity)
+    git(scan_repo, 'add', '.')
+    git(scan_repo, 'commit', '-qm', 'Approved identity')
+    assert scan(scan_repo).returncode == 0
+
+
+@pytest.mark.parametrize('identity', [
+    'xci' + '@' + 'example.invalid', 'ci' + '@' + 'example.invalid.evil',
+    'ci' + '@' + 'example.invalid-evil', 'ci+other' + '@' + 'example.invalid',
+    'person' + '@' + 'example.invalid',
+])
+def test_allowlist_does_not_accept_lookalikes(scan_repo, identity):
+    (scan_repo / 'fixture').write_text(identity)
+    assert scan(scan_repo).returncode != 0
+
+
+def test_approved_email_does_not_hide_same_line_credential(scan_repo):
+    (scan_repo / 'fixture').write_text('ci@example.invalid gh' + 'p_' + 'x' * 35)
+    assert scan(scan_repo).returncode != 0
+
+
+def test_historical_identity_boundary_and_new_identity(scan_repo):
+    identity = 'person' + '@' + 'example.invalid'
+    git(scan_repo, 'config', 'user.email', identity)
+    git(scan_repo, 'add', '.')
+    git(scan_repo, 'commit', '-qm', 'Historical identity')
+    boundary = git(scan_repo, 'rev-parse', 'HEAD')
+    script = scan_repo / 'scripts/check-publication.sh'
+    script.write_text(script.read_text().replace(
+        "history_identity_boundary='1217e0b8ded0c12840076713ded8bbaedaacb55e'",
+        f"history_identity_boundary='{boundary}'",
+    ))
+    assert scan(scan_repo).returncode == 0
+    git(scan_repo, 'add', '.')
+    git(scan_repo, 'commit', '-qm', 'Unapproved new identity')
+    result = scan(scan_repo)
+    assert result.returncode != 0
+    assert 'unapproved new commit identity' in result.stderr
+    assert identity not in result.stderr
+
+
+def test_unapproved_commit_message_email(scan_repo):
+    git(scan_repo, 'add', '.')
+    git(scan_repo, 'commit', '-qm', 'Contact person' + '@' + 'example.invalid')
+    result = scan(scan_repo)
+    assert result.returncode != 0
+    assert 'email patterns in commit text' in result.stderr
+
+
+def test_default_nonsecret_policy(scan_repo):
+    (scan_repo / 'fixture').write_text('/home/' + 'fixture/private')
+    environment = dict(os.environ)
+    environment.pop('DENIED_TERMS', None)
+    result = subprocess.run(['bash', str(scan_repo / 'scripts/check-publication.sh')],
+                            capture_output=True, text=True, env=environment)
+    assert result.returncode != 0
+    assert 'denied terms in files' in result.stderr
+
+
+def test_github_merge_committer_is_allowed(scan_repo):
+    git(scan_repo, 'config', 'user.email', '14136835+mg-mg-mg@users.noreply.github.com')
+    git(scan_repo, 'add', '.')
+    subprocess.run(['git', '-C', str(scan_repo), 'commit', '-qm', 'GitHub merge'],
+                   check=True, env=dict(os.environ, GIT_COMMITTER_EMAIL='noreply' + '@github.com'))
+    assert scan(scan_repo).returncode == 0
+
+
+def test_github_committer_identity_is_not_an_author_exception(scan_repo):
+    git(scan_repo, 'config', 'user.email', 'noreply' + '@github.com')
+    git(scan_repo, 'add', '.')
+    git(scan_repo, 'commit', '-qm', 'Unapproved author')
+    assert 'unapproved new commit identity (author)' in scan(scan_repo).stderr
+
+
+def test_new_annotated_tag_identity(scan_repo):
+    git(scan_repo, 'add', '.')
+    git(scan_repo, 'commit', '-qm', 'Root')
+    git(scan_repo, 'tag', '-am', 'Approved release', 'approved')
+    assert scan(scan_repo).returncode == 0
+    git(scan_repo, 'config', 'user.email', 'person' + '@' + 'example.invalid')
+    git(scan_repo, 'tag', '-am', 'Unapproved release', 'unapproved')
+    result = scan(scan_repo)
+    assert result.returncode != 0
+    assert 'unapproved new tag identity' in result.stderr
+
+
+def test_annotated_tag_historical_target_does_not_exempt_tagger(scan_repo):
+    git(scan_repo, 'add', '.')
+    git(scan_repo, 'commit', '-qm', 'Historical root')
+    boundary = git(scan_repo, 'rev-parse', 'HEAD')
+    script = scan_repo / 'scripts/check-publication.sh'
+    script.write_text(script.read_text().replace(
+        "history_identity_boundary='1217e0b8ded0c12840076713ded8bbaedaacb55e'",
+        f"history_identity_boundary='{boundary}'",
+    ))
+    git(scan_repo, 'config', 'user.email', 'person' + '@' + 'example.invalid')
+    git(scan_repo, 'tag', '-am', 'Historical release', 'historical', boundary)
+    assert 'unapproved new tag identity' in scan(scan_repo).stderr
