@@ -1,5 +1,9 @@
 # Agentic Delivery Kit
 
+[![CI](https://github.com/mg-mg-mg/agentic-delivery-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/mg-mg-mg/agentic-delivery-kit/actions/workflows/ci.yml)
+
+**Why this exists:** AI coding agents write code fast, but speed only helps if their output can be trusted. This kit shows the control boundaries I run in production: the agent that writes code cannot publish or merge it, a separate agent reviews the exact commit, a third re-runs the checks, and only a trusted dispatcher merges. It is a synthetic, tested extraction with no product code.
+
 A public-safe reference implementation extracted from a production agentic delivery setup. It demonstrates reusable control boundaries, not the original application's code, data, configuration, history, or operational records.
 
 ## Architecture
