@@ -34,6 +34,8 @@ Audit repair verification (2026-10-15): `uv sync --group dev`, `uv sync --locked
 
 Independent-review follow-up (2026-10-15): eight additional regressions failed on the prior repair candidate and pass after distinguishing cooperative lock/lease acquisition contention from failures and rechecking full PR admission inside the lease. The full suite now passes 173 tests; locked dependency sync, Ruff, `make verify`, navigation baseline and publication scan also passed. Contention leaves no failure record, preserves phase/evidence and reports `busy`; an existing lease is never removed automatically. Verified lanes resume from `merge_ready` without launching replacement model roles.
 
+CI publication scans check out the real pull-request head (or the push event SHA) with full history and no persisted checkout credentials. This scans the submitted commits rather than GitHub's ephemeral test-merge identity. The identity policy remains unchanged; no synthetic merge-commit exemption is granted.
+
 ## Runtime boundaries not proven by these checks
 
 Credentialless unit tests validate command construction, environment allowlists, ownership and metadata gates, fixed-SHA evidence and sticky leases. Real Git fixtures reject unrelated replacement repositories and accept legitimate linked worktrees by comparing shared Git metadata identity. They do not prove the installed Codex CLI's OS sandbox behavior. Live Codex author/reviewer/verifier execution, GitHub task delivery/merge and actual LaunchAgent installation were not exercised for this extraction. Those remain explicit activation prerequisites.

@@ -44,3 +44,6 @@ def test_ci_enforces_documented_gates():
     assert 'python-version: ${{ matrix.python }}' in workflow
     assert 'python -m delivery_kit.navigation --source examples/navigation --graph examples/navigation/graph.json --baseline examples/navigation/baseline.json' in workflow
     assert '# v4.4.0' in workflow
+    assert 'ref: ${{ github.event.pull_request.head.sha || github.sha }}' in workflow
+    assert 'fetch-depth: 0' in workflow
+    assert 'persist-credentials: false' in workflow
