@@ -33,7 +33,7 @@ worktree_bytes() {
 index_bytes() {
     git ls-files --stage -z | while IFS= read -r -d '' entry; do
         header="${entry%%$'\t'*}"
-        read -r mode blob stage <<< "$header"
+        read -r _ blob _ <<< "$header"
         git cat-file blob "$blob"
     done
 }
@@ -46,7 +46,7 @@ history_bytes() {
     git rev-list --all | while IFS= read -r commit; do
         git ls-tree -r "$commit"
     done | while IFS=$'\t' read -r header path; do
-        read -r mode type blob <<< "$header"
+        read -r _ type blob <<< "$header"
         if [[ "$type" == blob ]]; then printf '%s\n' "$blob"; fi
     done | sort -u | while IFS= read -r blob; do
         git cat-file blob "$blob"

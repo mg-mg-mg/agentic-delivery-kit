@@ -53,6 +53,8 @@ read_roots = [] # Optional locally installed toolchain roots, never credentials.
 label_prefix = "com.example.agentic-delivery"
 interval_seconds = 900
 python = "python3"
+# Timer PATH; add the absolute directories holding gh, git and the agent command.
+path = ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
 
 [guards]
 forbidden_paths = [".env", ".env.*", "*.env", "*.pem", "*.key", "*credential*", "*secret*", ".github/workflows/*"]

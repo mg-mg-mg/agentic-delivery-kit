@@ -23,11 +23,11 @@ flowchart LR
 
 In this reference, only the trusted dispatcher has GitHub access. Model roles cannot commit, publish, change accounts, or deploy. The author edits a dedicated worktree. A fresh read-only role reviews exact head and base commits and specifies checks. A separate verifier executes those checks without general host credentials or tool networking. The dispatcher validates structured evidence, current issue eligibility, the PR head/base and remaining criteria before a head-pinned squash merge. It verifies the resulting parent and tree afterward.
 
-The lease serializes cooperating local integration commands. It deliberately remains after failure. Queue claims and worker locks prevent duplicate local authors. Finite pass/phase/repair budgets, disk/file limits and bounded diagnostics constrain unattended work. These controls do not block independent remote writers.
+The lease serializes cooperating local integration commands. It deliberately remains after mutation-path failure, but read-only merge refusals release it. Queue claims and worker locks prevent duplicate local authors. Finite pass/phase/repair budgets, terminal stopped lanes, disk/file limits and bounded private diagnostics constrain unattended work. These controls do not block independent remote writers.
 
 ## Configuration and safe start
 
-Requires Python 3.11+, Git, the GitHub CLI, a compatible Codex CLI, and an HTTPS origin matching the configured repository. Runtime modules use only the standard library. Development checks use pytest and Ruff.
+Requires macOS or Linux (POSIX), Python 3.11+, Git, the GitHub CLI, a compatible Codex CLI, and an HTTPS origin matching the configured repository. Runtime modules use only the standard library. Development checks use pytest and Ruff.
 
 The role-launch adapter supports the Codex CLI only. There is no OMP adapter; changing the command name does not migrate its arguments or permission profiles.
 
@@ -43,7 +43,7 @@ Before publication, run `bash scripts/check-publication.sh`. Its offline, nonsec
 
 If historical tag identities ever need grandfathering, pin the approved tag-object SHAs, not their target commits.
 
-The default command validates configuration only. It does not contact GitHub or start model work. **Execution and timer installation are disabled by default.** Copy `kit.toml` to the ignored `local.toml` and configure the target checkout, repository owner/name, label policy, optional Project fields/options, names, state location, model/effort, worker count and limits. All deployment-specific settings belong in that one file. Secrets never belong there.
+The default command validates configuration only. It does not contact GitHub or start model work. **Execution and timer installation are disabled by default.** Copy `kit.toml` to the ignored `local.toml` and configure the target checkout, repository owner/name, label policy, optional Project fields/options, names, state location, model/effort, worker count and limits. Set `launch.path` to a nonempty list of absolute directories containing Git, `gh` and the configured agent command; rendered timers use that explicit PATH rather than an interactive shell's environment. All deployment-specific settings belong in that one file. Secrets never belong there.
 
 Before enabling, validate the installed CLI's named permission profile on a disposable checkout: tool networking denied, secret-file reads denied, author writes confined to its checkout, reviewer writes denied, Git metadata writes denied, user hooks/apps disabled. Separately validate OS-level containment of every descendant for the role's lifetime, including detached sessions and immediate parent exits; process-group cleanup does not provide it. The Codex inference broker still needs its own login and model connectivity. “Offline” describes tools and checks, not inference transport. Both `permissions_validated` and `process_containment_validated` are required owner assertions, not sandbox audits performed by this package.
 

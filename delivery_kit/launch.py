@@ -35,6 +35,7 @@ def documents(config, kit_root: Path):
                                  '--config', str(config.path), '--worker', str(worker), '--execute'],
             'WorkingDirectory': str(kit_root), 'StartInterval': launch['interval_seconds'],
             'RunAtLoad': False, 'ProcessType': 'Background', 'Umask': 0o077,
+            'EnvironmentVariables': {'PATH': ':'.join(launch['path'])},
             'StandardOutPath': str(directory / 'timer.out'),
             'StandardErrorPath': str(directory / 'timer.err'),
         }

@@ -54,12 +54,16 @@ def load(path: Path) -> Config:
     for section, names in {
         'queue': ('hold_labels', 'allowed_types', 'priorities', 'tracks'),
         'project': ('ready_options',), 'agent': ('read_roots',),
-        'guards': ('forbidden_paths', 'required_docs'),
+        'guards': ('forbidden_paths', 'required_docs'), 'launch': ('path',),
     }.items():
         for name in names:
             if not isinstance(data[section].get(name), list) or not all(
                     isinstance(value, str) and value for value in data[section][name]):
                 raise ValueError(f'invalid string list: {section}.{name}')
+    if not data['launch']['path'] or not all(
+            Path(value).is_absolute() and ':' not in value and '\n' not in value
+            and '\0' not in value for value in data['launch']['path']):
+        raise ValueError('launch.path must contain absolute directories without separators')
     if (type(runtime.get('enabled')) is not bool
             or any(type(data['agent'].get(name)) is not bool
                    for name in ('permissions_validated', 'process_containment_validated'))):
