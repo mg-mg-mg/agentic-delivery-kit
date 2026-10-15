@@ -139,3 +139,65 @@ def test_command_stderr_is_bounded_and_private(config, monkeypatch, capsys):
     assert failure['stderr_tail'].endswith(' private-stderr-sentinel')
     assert 'private-stderr-sentinel' not in failure['message']
     assert 'private-stderr-sentinel' not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('resource, phase', [
+    ('queue.lock', 'review'), ('merge.lock', 'merge_pending'), ('lease', 'merge_pending'),
+    ('run.lock', 'merge_pending'), ('merge.lock', 'merge_ready'), ('lease', 'merge_ready'),
+])
+def test_peer_contention_is_busy_and_next_tick_resumes(config, git_repo, monkeypatch, capsys, resource, phase):
+    dispatcher = lane(config, monkeypatch)
+    config.data['runtime']['enabled'] = True
+    config.data['agent'].update(permissions_validated=True, process_containment_validated=True)
+    monkeypatch.setattr(dispatcher_module, 'load', lambda path: config)
+    monkeypatch.setattr(dispatcher_module, 'Dispatcher', lambda config, worker: dispatcher)
+    mutations = []
+    if resource == 'queue.lock':
+        dispatcher.active.unlink()
+        dispatcher.state = {}
+        monkeypatch.setattr(dispatcher, 'claim', lambda: Dispatcher.claim(dispatcher))
+        monkeypatch.setattr(dispatcher_module, 'select', lambda *args: None)
+    else:
+        dispatcher.state.update(phase=phase, evidence={'head': 'head', 'base': 'base'})
+        dispatcher.persist()
+        monkeypatch.setattr(dispatcher, 'git', lambda *args, **kwargs:
+                            'base' if args[0] == 'rev-parse' else '')
+        monkeypatch.setattr(dispatcher.github, 'pr', lambda number: open_pr())
+        monkeypatch.setattr(dispatcher.github, 'json', lambda *args: {'object': {'sha': 'base'}})
+        monkeypatch.setattr(dispatcher.github, 'command', lambda *args: mutations.append('merge'))
+        monkeypatch.setattr(dispatcher, 'reconcile', lambda **kwargs:
+                            mutations.append('reconcile') if phase == 'merge_pending' else None)
+        monkeypatch.setattr(dispatcher, 'phase', lambda *args: pytest.fail('must reuse fixed-SHA evidence'))
+    before = dispatcher.active.read_bytes() if dispatcher.active.exists() else None
+    held = main_lease(git_repo) if resource == 'lease' else dispatcher_module.lock(
+        dispatcher.directory / resource if resource == 'run.lock' else config.state / resource)
+    with held:
+        assert dispatcher_module.main(['--execute']) == 0
+        assert capsys.readouterr().out == 'busy\n'
+        assert not (dispatcher.directory / 'failure.json').exists()
+        assert (dispatcher.active.read_bytes() if dispatcher.active.exists() else None) == before
+        assert mutations == []
+        if resource == 'lease':
+            assert (git_repo / '.git' / 'delivery-main-lease').exists()
+    assert dispatcher_module.main(['--execute']) == 0
+    assert capsys.readouterr().out == ('idle\n' if resource == 'queue.lock' else 'merged\n')
+    assert not (dispatcher.directory / 'failure.json').exists()
+    expected = 'reconcile' if phase == 'merge_pending' else 'merge'
+    assert mutations == ([] if resource == 'queue.lock' else [expected])
+
+
+@pytest.mark.parametrize('change', [{'state': 'CLOSED'}, {'baseRefName': 'other'}])
+def test_in_lease_pr_admission_change_refuses_without_mutation(config, git_repo, monkeypatch, change):
+    dispatcher = lane(config, monkeypatch)
+    monkeypatch.setattr(dispatcher, 'git', lambda *args, **kwargs:
+                        'base' if args[0] == 'rev-parse' else '')
+    reads = []
+    def pr(number):
+        reads.append(number)
+        return open_pr() | (change if len(reads) > 1 else {})
+    monkeypatch.setattr(dispatcher.github, 'pr', pr)
+    monkeypatch.setattr(dispatcher.github, 'json', lambda *args: {'object': {'sha': 'base'}})
+    monkeypatch.setattr(dispatcher.github, 'command', lambda *args: pytest.fail('must not attempt merge'))
+    assert dispatcher.merge() == 'refused'
+    assert dispatcher.state['phase'] == 'needs_rebase'
+    assert not (git_repo / '.git' / 'delivery-main-lease').exists()

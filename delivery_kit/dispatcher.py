@@ -16,7 +16,11 @@ from . import agent
 from .config import load
 from .github import GitHub, eligible, fingerprint, select
 from .guards import CLOSING, publication, remote_gate, review_evidence, safe_git_metadata, staged, verification_evidence
-from .lease import main_lease
+from .lease import LeaseBusy, main_lease
+
+
+class Busy(BlockingIOError):
+    """A cooperating peer owns a lock; a later tick may retry."""
 
 
 @contextmanager
@@ -24,7 +28,10 @@ def lock(path: Path):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     descriptor = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise Busy('worker or shared operation busy') from error
         yield
     finally:
         os.close(descriptor)
@@ -276,9 +283,10 @@ class Dispatcher:
                 # refusals return normally; uncertain mutation outcomes stay sticky.
                 try:
                     pr = self.github.pr(self.state['pr'])
+                    remote_gate(self.config, pr, head, base)
                     live = self.github.json('gh', 'api',
                                             f'repos/{self.config.repo}/git/ref/heads/{base_branch}')
-                    if pr.get('headRefOid') != head or live.get('object', {}).get('sha') != base:
+                    if live.get('object', {}).get('sha') != base:
                         return self.refuse('frozen merge snapshot moved')
                 except (RuntimeError, OSError, subprocess.SubprocessError) as error:
                     return self.refuse(str(error))
@@ -306,6 +314,8 @@ class Dispatcher:
             with lock(self.config.state / 'merge.lock'), main_lease(self.config.checkout):
                 self.reconcile()
             return 'merged'
+        if self.state['phase'] == 'merge_ready':
+            return self.merge()
         issue = self.current_issue()
         if self.state['phase'] == 'checkout':
             worktree = Path(self.state['worktree'])
@@ -363,7 +373,8 @@ class Dispatcher:
         if self.git('rev-parse', 'HEAD', cwd=worktree) != head or self.git('status', '--porcelain', cwd=worktree):
             self.stop('verification_changed_source')
             raise RuntimeError('independent verification changed reviewed source')
-        self.state['evidence'] = {'head': head, 'base': base, 'review': review, 'verification': verify}
+        self.state.update(phase='merge_ready', evidence={
+            'head': head, 'base': base, 'review': review, 'verification': verify})
         self.persist()
         return self.merge()
 
@@ -384,17 +395,23 @@ def main(argv=None):
             or not config.section('agent')['process_containment_validated']):
         parser.error('execution disabled until owner configuration and isolation validation')
     dispatcher = Dispatcher(config, args.worker)
-    with lock(dispatcher.directory / 'run.lock'):
-        try:
-            print(dispatcher.turn())
-        except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as error:
-            save(dispatcher.directory / 'failure.json', {
-                'operation': dispatcher.state.get('phase', 'preflight'),
-                'error_type': type(error).__name__, 'message': str(error),
-                'stderr_tail': getattr(error, 'stderr_tail', ''),
-            })
-            print('delivery failed, inspect private state diagnostics')
-            return 1
+    try:
+        with lock(dispatcher.directory / 'run.lock'):
+            try:
+                print(dispatcher.turn())
+            except (Busy, LeaseBusy):
+                raise
+            except (RuntimeError, OSError, ValueError, subprocess.SubprocessError) as error:
+                save(dispatcher.directory / 'failure.json', {
+                    'operation': dispatcher.state.get('phase', 'preflight'),
+                    'error_type': type(error).__name__, 'message': str(error),
+                    'stderr_tail': getattr(error, 'stderr_tail', ''),
+                })
+                print('delivery failed, inspect private state diagnostics')
+                return 1
+    except (Busy, LeaseBusy):
+        print('busy')
+        return 0
     return 0
 
 
