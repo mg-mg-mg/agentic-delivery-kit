@@ -141,8 +141,7 @@ class Dispatcher:
             worktree = parent / repo['worktree_template'].format(number=issue['number'], slug=slug)
             if worktree.exists() or self.git('branch', '--list', branch):
                 raise RuntimeError('task lane already exists')
-            with main_lease(self.config.checkout):
-                self.git('fetch', 'origin', repo['base_branch'])
+            self.git('fetch', 'origin', repo['base_branch'])
             self.state = {'number': issue['number'], 'fingerprint': fingerprint(issue),
                           'branch': branch, 'worktree': str(worktree), 'phase': 'checkout',
                           'base': self.git('rev-parse', f'origin/{repo["base_branch"]}'), 'repairs': 0}
@@ -206,7 +205,7 @@ class Dispatcher:
         self.state.update(pr=pulls[0]['number'], head=head, phase='review')
         self.persist()
 
-    def reconcile(self):
+    def reconcile(self, *, immediate=False):
         evidence = self.state['evidence']
         pr = self.github.pr(self.state['pr'])
         if pr.get('state') != 'MERGED' or pr.get('headRefOid') != evidence['head']:
@@ -215,6 +214,11 @@ class Dispatcher:
                 or pr.get('headRefName') != self.state['branch']):
             raise RuntimeError('merged PR target or owned branch changed')
         commit = pr['mergeCommit']['oid']
+        if immediate:
+            live = self.github.json('gh', 'api',
+                                    f'repos/{self.config.repo}/git/ref/heads/{self.config.section("repository")["base_branch"]}')
+            if live.get('object', {}).get('sha') != commit:
+                raise RuntimeError('post-merge integration ref differs, manual reconciliation required')
         self.git('fetch', 'origin', self.config.section('repository')['base_branch'])
         parents = self.git('rev-list', '--parents', '-n', '1', commit).split()
         if parents != [commit, evidence['base']]:
@@ -226,35 +230,72 @@ class Dispatcher:
         self.current_issue()
         self.state.update(phase='complete', merged=commit)
         self.persist()
-        save(self.directory / 'completed.json', self.state)
+        completed = self.directory / 'completed.json'
+        history = json.loads(completed.read_text()) if completed.exists() else []
+        if isinstance(history, dict):
+            history = [history]
+        if not any(record.get('merged') == commit and record.get('number') == self.state['number']
+                   for record in history):
+            history.append(self.state.copy())
+        save(completed, history)
         self.active.unlink()
         # Leave worktree, branch and Issue intact. Cleanup and completion are explicit owner actions.
+
+    def stop(self, reason: str):
+        self.state.update(phase='blocked', reason=reason)
+        self.persist()
+
+    def refuse(self, reason: str):
+        self.state.update(phase='needs_rebase', reason=reason)
+        self.persist()
+        return 'refused'
 
     def merge(self):
         reserve = self.config.section('runtime')['merge_reserve_seconds']
         if self.deadline - time.monotonic() < reserve:
             raise TimeoutError('insufficient merge reserve')
         worktree = self.worktree()
-        with lock(self.config.state / 'merge.lock'), main_lease(self.config.checkout):
-            base_branch = self.config.section('repository')['base_branch']
-            self.git('fetch', 'origin', base_branch)
-            if self.git('rev-parse', f'origin/{base_branch}') != self.state['base']:
-                raise RuntimeError('base changed, fresh author rebase and review required')
-            self.current_issue()
-            if self.git('status', '--porcelain', cwd=worktree):
-                raise RuntimeError('reviewed checkout dirty')
-            head, base = self.state['head'], self.state['base']
-            remote_gate(self.config, self.github.pr(self.state['pr']), head, base)
-            if CLOSING.search(self.git('log', '--format=%B', f'{base}..{head}', cwd=worktree)):
-                raise RuntimeError('commits could prematurely close an Issue')
-            self.git('diff', '--check', f'{base}..{head}', cwd=worktree)
-            self.state['phase'] = 'merge_pending'
-            self.persist()
-            self.github.command('gh', 'pr', 'merge', str(self.state['pr']), '--repo', self.config.repo,
-                                '--squash', '--match-head-commit', head)
-            self.reconcile()
+        head, base = self.state['head'], self.state['base']
+        base_branch = self.config.section('repository')['base_branch']
+        with lock(self.config.state / 'merge.lock'):
+            try:
+                self.git('fetch', 'origin', base_branch)
+                if self.git('rev-parse', f'origin/{base_branch}') != base:
+                    return self.refuse('base moved')
+                self.current_issue()
+                if self.git('status', '--porcelain', cwd=worktree):
+                    return self.refuse('reviewed checkout dirty')
+                remote_gate(self.config, self.github.pr(self.state['pr']), head, base)
+                if CLOSING.search(self.git('log', '--format=%B', f'{base}..{head}', cwd=worktree)):
+                    return self.refuse('commits could prematurely close an Issue')
+                self.git('diff', '--check', f'{base}..{head}', cwd=worktree)
+            except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+                return self.refuse(str(error))
+            with main_lease(self.config.checkout):
+                # Only the frozen snapshot is rechecked here. Proven pre-mutation
+                # refusals return normally; uncertain mutation outcomes stay sticky.
+                try:
+                    pr = self.github.pr(self.state['pr'])
+                    live = self.github.json('gh', 'api',
+                                            f'repos/{self.config.repo}/git/ref/heads/{base_branch}')
+                    if pr.get('headRefOid') != head or live.get('object', {}).get('sha') != base:
+                        return self.refuse('frozen merge snapshot moved')
+                except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+                    return self.refuse(str(error))
+                self.state['phase'] = 'merge_pending'
+                self.persist()
+                self.github.command('gh', 'pr', 'merge', str(self.state['pr']), '--repo', self.config.repo,
+                                    '--squash', '--match-head-commit', head)
+                self.reconcile(immediate=True)
+        return 'merged'
 
     def turn(self):
+        if (self.directory / 'failure.json').exists():
+            return 'stopped'
+        if self.active.exists():
+            self.state = json.loads(self.active.read_text())
+            if self.state['phase'] in {'blocked', 'needs_rebase'}:
+                return 'stopped'
         self.preflight()
         self.claim()
         if not self.state:
@@ -281,6 +322,7 @@ class Dispatcher:
                                 json.dumps({'title': issue['title'], 'body': issue['body'],
                                             'findings': self.state.get('findings', [])}))
             if result.get('status') != 'ready':
+                self.stop('author_blocked')
                 raise RuntimeError('author blocked, lane retained')
             self.state['phase'] = 'publish'
             self.persist()
@@ -297,23 +339,33 @@ class Dispatcher:
                             json.dumps({'title': issue['title'], 'body': issue['body']}))
         if review.get('verdict') == 'changes_required' and review.get('head') == head and review.get('base') == base:
             self.state['repairs'] += 1
+            self.persist()
             if self.state['repairs'] > self.config.section('runtime')['max_repairs']:
+                self.stop('repair_budget_exhausted')
                 raise RuntimeError('repair budget exhausted, manual inspection required')
             self.state.update(phase='author', findings=review.get('findings', []))
             self.persist()
             return 'revision queued'
-        checks = review_evidence(review, head, base)
+        try:
+            checks = review_evidence(review, head, base)
+        except RuntimeError:
+            self.stop('review_rejected')
+            raise
         verify = self.phase('verify', VERIFY,
                             f'Independently execute every exact argv check at head {head}, base {base}. '
                             'Record observed exit codes, never invent success. No network or credentials. '
                             'Do not modify tracked files. CHECKS=' + json.dumps(checks))
-        verification_evidence(verify, head, base, checks)
+        try:
+            verification_evidence(verify, head, base, checks)
+        except RuntimeError:
+            self.stop('verification_failed')
+            raise
         if self.git('rev-parse', 'HEAD', cwd=worktree) != head or self.git('status', '--porcelain', cwd=worktree):
+            self.stop('verification_changed_source')
             raise RuntimeError('independent verification changed reviewed source')
         self.state['evidence'] = {'head': head, 'base': base, 'review': review, 'verification': verify}
         self.persist()
-        self.merge()
-        return 'merged'
+        return self.merge()
 
 
 def main(argv=None):
@@ -339,6 +391,7 @@ def main(argv=None):
             save(dispatcher.directory / 'failure.json', {
                 'operation': dispatcher.state.get('phase', 'preflight'),
                 'error_type': type(error).__name__, 'message': str(error),
+                'stderr_tail': getattr(error, 'stderr_tail', ''),
             })
             print('delivery failed, inspect private state diagnostics')
             return 1

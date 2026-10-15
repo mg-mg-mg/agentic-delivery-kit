@@ -13,7 +13,7 @@ def git(repo, *args):
                           text=True, capture_output=True).stdout.strip()
 
 
-@pytest.mark.parametrize('mismatch', ['none', 'parent', 'tree', 'head', 'target', 'ancestor'])
+@pytest.mark.parametrize('mismatch', ['none', 'parent', 'tree', 'head', 'target', 'ancestor', 'readback'])
 def test_squash_reconciliation_uses_real_git_objects(config, git_repo, issue, monkeypatch, mismatch):
     base = git(git_repo, 'rev-parse', 'HEAD')
     (git_repo / 'helper.py').write_text('def helper():\n    return 1\n')
@@ -37,16 +37,24 @@ def test_squash_reconciliation_uses_real_git_objects(config, git_repo, issue, mo
         'mergeCommit': {'oid': merged},
     })
     monkeypatch.setattr(dispatcher, 'current_issue', lambda: issue)
+    monkeypatch.setattr(dispatcher.github, 'json', lambda *args: {
+        'object': {'sha': base if mismatch == 'readback' else merged}})
     original = dispatcher.git
     monkeypatch.setattr(dispatcher, 'git', lambda *args, **kwargs:
                         '' if args[0] == 'fetch' else original(*args, **kwargs))
     if mismatch == 'none':
         dispatcher.reconcile()
         assert not dispatcher.active.exists()
-        assert json.loads((dispatcher.directory / 'completed.json').read_text())['merged'] == merged
+        history = json.loads((dispatcher.directory / 'completed.json').read_text())
+        assert [record['merged'] for record in history] == [merged]
+        dispatcher.state.update(number=2, phase='merge_pending')
+        dispatcher.persist()
+        dispatcher.reconcile()
+        history = json.loads((dispatcher.directory / 'completed.json').read_text())
+        assert [record['number'] for record in history] == [1, 2]
     else:
         with pytest.raises(RuntimeError):
-            dispatcher.reconcile()
+            dispatcher.reconcile(immediate=True)
         assert dispatcher.active.exists()
         assert dispatcher.state['phase'] == 'merge_pending'
 

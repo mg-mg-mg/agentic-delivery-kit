@@ -10,6 +10,14 @@ import time
 from .config import Config
 
 
+class CommandFailed(RuntimeError):
+    """Keep bounded command diagnostics for private failure state, not stdout."""
+
+    def __init__(self, args, result):
+        super().__init__(f'{args[0]} {args[1]} failed ({result.returncode})')
+        self.stderr_tail = result.stderr.strip()[-300:]
+
+
 class GitHub:
     def __init__(self, config: Config, deadline: float | None = None):
         self.config = config
@@ -25,7 +33,7 @@ class GitHub:
         result = subprocess.run(args, cwd=cwd or self.config.checkout, env=env,
                                 capture_output=True, text=True, timeout=seconds)
         if result.returncode:
-            raise RuntimeError(f'{args[0]} {args[1]} failed ({result.returncode})')
+            raise CommandFailed(args, result)
         return result.stdout.strip()
 
     def json(self, *args: str):
