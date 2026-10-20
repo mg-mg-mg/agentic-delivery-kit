@@ -8,18 +8,12 @@ The dispatcher is retained as a constrained working example, not a description o
 
 ## Reference architecture
 
-```mermaid
-flowchart LR
-    Q[Opted-in issue queue] --> D[Trusted dispatcher]
-    D --> A[Offline credentialless author]
-    A --> P[Dispatcher commits and publishes]
-    P --> R[Separate read-only reviewer]
-    R --> V[Credentialless verifier]
-    V --> G[Fixed-head guarded squash merge]
-    G --> C[Parent and tree reconciliation]
-    L[Sticky cooperative lease] --- D
-    L --- G
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/trust-boundaries-dark.svg">
+  <img alt="Two trust zones. Only the trusted dispatcher holds GitHub credentials: it takes opted-in Issues, commits, pushes, opens PRs and performs head-pinned squash merges, serialized by an integration lease, under the Owner's opt-in label, configuration and containment assertions. The author (writes its own worktree only), reviewer (read-only at fixed head and base) and verifier (runs reviewer-selected checks) run without credentials or tool networking and reach only the model API, which has its own login." src="assets/trust-boundaries.svg" width="100%">
+</picture>
+
+Order of one task: opted-in Issue → author → dispatcher commits and publishes → separate read-only reviewer → credentialless verifier → fixed-head guarded squash merge → parent and tree reconciliation.
 
 In this reference, only the trusted dispatcher has GitHub access. Model roles cannot commit, publish, change accounts, or deploy. The author edits a dedicated worktree. A fresh read-only role reviews exact head and base commits and specifies checks. A separate verifier executes those checks without general host credentials or tool networking. The dispatcher validates structured evidence, current issue eligibility, the PR head/base and remaining criteria before a head-pinned squash merge. It verifies the resulting parent and tree afterward.
 
