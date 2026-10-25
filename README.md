@@ -6,6 +6,34 @@
 
 The dispatcher is retained as a constrained working example, not a description of today's production workflow. The companion [Agentic Engineering case study](https://github.com/mg-mg-mg/agentic-engineering) describes current practice.
 
+## Start here: local verification
+
+Run the synthetic reference checks locally, without GitHub credentials or a model runtime. Activation and containment prerequisites are covered in [Configuration and safe start](#configuration-and-safe-start).
+
+Requires macOS or Linux, Python 3.11+, Git, `uv` and ripgrep (`rg`, used by publication-scan tests). No GitHub/Codex login or model runtime is needed. The first dependency download may take longer; network access is only needed for the public clone and development dependencies.
+
+Run this as one block: `&&` stops at the first failed step, before any later check.
+
+```sh
+git clone --depth 1 https://github.com/mg-mg-mg/agentic-delivery-kit.git &&
+cd agentic-delivery-kit &&
+uv sync --group dev &&
+uv run pytest -q &&
+uv run ruff check . &&
+uv run python -m delivery_kit.dispatcher --config kit.toml
+```
+
+The final command is a **configuration-only dry run**. Expect `"repository": "example/demo"`, `"enabled": false` and `"mode": "configuration-only"`. It does not contact GitHub, start model work or install timers. Stop on any error; do not add `--execute` to troubleshoot.
+
+To inspect a concrete failure-stop case, run the existing mocked verifier-failure regression:
+
+```sh
+uv run pytest -q tests/test_dispatcher_audit.py \
+  -k 'failed_phase_stops_later_ticks and verification_failed'
+```
+
+This test should pass: failed verifier evidence blocks the lane, and the next tick stops without another role call. It does not run a model. See [CI](https://github.com/mg-mg-mg/agentic-delivery-kit/actions/workflows/ci.yml) for full-suite results and [Configuration and safe start](#configuration-and-safe-start) for activation prerequisites and limits.
+
 ## Reference architecture
 
 <picture>
